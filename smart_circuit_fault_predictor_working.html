@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Circuit Fault Predictor</title>
+<style>
+:root{--bg:#0b1220;--panel:#121e32;--line:#2b3c58;--text:#edf4ff;--muted:#a9bad2;--accent:#60e1bd;--warn:#ffcf70;--danger:#ff9da8}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top right,#1b3654 0,#0b1220 48%);font-family:Arial,Helvetica,sans-serif;color:var(--text);min-height:100vh}
+header{text-align:center;padding:30px 16px 18px}
+.logo{display:inline-block;border:1px solid #3e607f;border-radius:12px;padding:9px 13px;color:var(--accent);font-weight:bold;letter-spacing:1px;margin-bottom:12px}
+h1{font-size:clamp(1.7rem,4vw,2.6rem);margin:0 0 10px}
+header p{color:var(--muted);margin:0 auto;max-width:700px;line-height:1.6}
+main{width:min(1050px,94%);margin:18px auto 40px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:rgba(18,30,50,.97);border:1px solid var(--line);border-radius:17px;padding:22px;box-shadow:0 12px 35px #0002;min-width:0}
+h2{font-size:1.15rem;margin:0 0 18px}
+label{display:block;color:var(--muted);font-size:.92rem;margin:13px 0 7px}
+input,select{width:100%;padding:12px 13px;border-radius:9px;border:1px solid #3a4e6c;background:#0a1425;color:var(--text);font-size:1rem;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{border:0;border-radius:10px;padding:13px 15px;font-weight:bold;font-size:.98rem;cursor:pointer}
+.primary{background:var(--accent);color:#07251e;width:100%;margin-top:18px}
+.secondary{background:#203653;color:var(--text);border:1px solid #3b5678;width:100%;margin-top:16px}
+button:disabled{opacity:.45;cursor:not-allowed}
+#result{min-height:250px}
+.placeholder{border:1px dashed #3a4e6c;border-radius:12px;padding:25px 16px;text-align:center;color:var(--muted);line-height:1.6}
+.badge{display:inline-block;border-radius:999px;padding:6px 10px;font-size:.82rem;font-weight:bold;background:#173d36;color:var(--accent)}
+.badge.danger{background:#4a2530;color:var(--danger)}
+.result-title{font-size:1.35rem;margin:13px 0 8px}
+.result-text{color:#cfdaeb;line-height:1.55}
+ul{padding-left:20px;line-height:1.65;color:#d8e4f4}
+.note{color:var(--muted);font-size:.82rem;line-height:1.5;margin-top:15px}
+.error{color:var(--danger);padding:12px;border:1px solid #75404a;border-radius:9px}
+footer{text-align:center;color:var(--muted);font-size:.85rem;padding:0 15px 28px}
+@media(max-width:760px){main{grid-template-columns:1fr}.card{padding:18px}}
+@media(max-width:420px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ECE LAB TOOL</div>
+  <h1>Smart Circuit Fault Predictor</h1>
+  <p>Enter a component's expected and measured values to check for possible faults and get troubleshooting suggestions.</p>
+</header>
+<main>
+<section class="card">
+  <h2>1. Component Test Details</h2>
+  <form id="diagnosticForm">
+    <label for="component">Electronic component</label>
+    <select id="component">
+      <option value="resistor">Resistor</option>
+      <option value="capacitor">Capacitor</option>
+      <option value="diode">Diode (forward voltage)</option>
+      <option value="led">LED (forward voltage)</option>
+      <option value="supply">DC power supply</option>
+      <option value="transistor">Transistor (hFE)</option>
+    </select>
+    <div class="grid">
+      <div><label for="expected">Expected value</label><input id="expected" type="number" step="any" value="1000" required></div>
+      <div><label for="measured">Measured value</label><input id="measured" type="number" step="any" value="1500" required></div>
+    </div>
+    <label for="unit">Measurement unit</label>
+    <select id="unit">
+      <option value="Ω">Ohms (Ω)</option>
+      <option value="kΩ">kilo-ohms (kΩ)</option>
+      <option value="nF">nanofarads (nF)</option>
+      <option value="µF">microfarads (µF)</option>
+      <option value="V">Volts (V)</option>
+      <option value="mA">milliamps (mA)</option>
+      <option value="hFE">hFE</option>
+    </select>
+    <label for="tolerance">Allowed deviation (%)</label>
+    <input id="tolerance" type="number" min="0" max="100" step="any" value="5" required>
+    <button class="primary" type="submit">Analyze Component</button>
+  </form>
+  <p class="note">Use matching units for expected and measured values. This educational tool uses threshold rules; it does not physically test components.</p>
+</section>
+<section class="card">
+  <h2>2. Diagnostic Result</h2>
+  <div id="result" aria-live="polite"><div class="placeholder">Your diagnosis will appear here.<br>Enter values and press <b>Analyze Component</b>.</div></div>
+  <button class="secondary" id="download" type="button" disabled>Download Diagnostic Report</button>
+</section>
+</main>
+<footer>Smart Circuit Fault Predictor · Educational project for electronics troubleshooting</footer>
+<script>
+(function () {
+  "use strict";
+
+  const form = document.getElementById("diagnosticForm");
+  const result = document.getElementById("result");
+  const downloadBtn = document.getElementById("download");
+  const component = document.getElementById("component");
+  const expectedInput = document.getElementById("expected");
+  const measuredInput = document.getElementById("measured");
+  const unitInput = document.getElementById("unit");
+  const toleranceInput = document.getElementById("tolerance");
+  let lastReport = "";
+
+  const guidance = {
+    resistor: {
+      title: "Resistor",
+      ok: "Resistance is within the specified tolerance.",
+      bad: "Resistance is outside the entered tolerance.",
+      steps: ["Confirm the resistor colour bands or printed code.", "Measure with power disconnected; isolate one lead if practical.", "Inspect for heat damage, cracks, or poor solder joints."]
+    },
+    capacitor: {
+      title: "Capacitor",
+      ok: "Measured capacitance is within the entered tolerance.",
+      bad: "Capacitance differs from the expected value beyond tolerance.",
+      steps: ["Discharge the capacitor safely before testing.", "Check polarity for electrolytic capacitors.", "Inspect for bulging, leakage, or damaged leads.", "Use an LCR meter when available; capacitance alone does not confirm ESR or leakage."]
+    },
+    diode: {
+      title: "Diode",
+      ok: "Forward voltage is within the entered tolerance.",
+      bad: "Forward voltage is outside the entered tolerance.",
+      steps: ["Test in diode mode with circuit power off.", "Reverse the probes to check reverse blocking behaviour.", "A near-zero reading in both directions may indicate a short; OL in both directions may indicate an open diode."]
+    },
+    led: {
+      title: "LED",
+      ok: "LED forward voltage is within the entered tolerance.",
+      bad: "LED forward voltage is outside the entered tolerance.",
+      steps: ["Check polarity and the current-limiting resistor.", "Use a suitable current-limited tester.", "Do not connect an LED directly to a supply without current limiting."]
+    },
+    supply: {
+      title: "DC Power Supply",
+      ok: "Output voltage is within the entered tolerance.",
+      bad: "Output voltage is outside the entered tolerance.",
+      steps: ["Check the meter range and probe connection.", "Inspect the supply input, output terminals, and cable.", "Compare the output under an appropriate safe load with its rated value."]
+    },
+    transistor: {
+      title: "Transistor",
+      ok: "Measured hFE is within the entered tolerance.",
+      bad: "Measured hFE differs from the expected value beyond tolerance.",
+      steps: ["Verify the transistor part number and pinout.", "Use a meter's transistor test socket or a suitable tester.", "Check for shorts between terminals and test out of circuit when possible."]
+    }
+  };
+
+  const defaults = {
+    resistor: [1000, 1500, "Ω", 5],
+    capacitor: [10, 8, "µF", 10],
+    diode: [0.7, 0.9, "V", 10],
+    led: [2, 2.1, "V", 10],
+    supply: [5, 4.4, "V", 5],
+    transistor: [100, 65, "hFE", 20]
+  };
+
+  function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, function (char) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char];
+    });
+  }
+
+  function analyze(event) {
+    if (event) event.preventDefault();
+
+    const type = component.value;
+    const expected = Number(expectedInput.value);
+    const measured = Number(measuredInput.value);
+    const tolerance = Number(toleranceInput.value);
+    const unit = unitInput.value;
+
+    if (!Number.isFinite(expected) || !Number.isFinite(measured) ||
+        !Number.isFinite(tolerance) || expected === 0 ||
+        tolerance < 0 || tolerance > 100 || expected < 0 || measured < 0) {
+      result.innerHTML = '<div class="error">Please enter valid positive values. Expected value must be greater than zero and tolerance must be between 0 and 100%.</div>';
+      downloadBtn.disabled = true;
+      lastReport = "";
+      return;
+    }
+
+    const deviation = Math.abs(measured - expected) / Math.abs(expected) * 100;
+    const signed = (measured - expected) / Math.abs(expected) * 100;
+    const isOK = deviation <= tolerance;
+    const info = guidance[type];
+    const status = isOK ? "Within tolerance" : "Possible fault";
+    const tips = info.steps.map(function (step) {
+      return "<li>" + escapeHTML(step) + "</li>";
+    }).join("");
+
+    result.innerHTML =
+      '<span class="badge ' + (isOK ? "" : "danger") + '">' + status + '</span>' +
+      '<div class="result-title">' + info.title + ' analysis</div>' +
+      '<p class="result-text">' + (isOK ? info.ok : info.bad) + '</p>' +
+      '<ul>' +
+      '<li><b>Expected:</b> ' + expected + ' ' + escapeHTML(unit) + '</li>' +
+      '<li><b>Measured:</b> ' + measured + ' ' + escapeHTML(unit) + '</li>' +
+      '<li><b>Deviation:</b> ' + deviation.toFixed(2) + '% (' + (signed >= 0 ? "+" : "") + signed.toFixed(2) + '% signed difference)</li>' +
+      '<li><b>Allowed:</b> ±' + tolerance + '%</li></ul>' +
+      '<h3>Suggested checks</h3><ul>' + tips + '</ul>' +
+      '<p class="note">Preliminary educational result only. Confirm using the component datasheet and suitable lab instruments.</p>';
+
+    lastReport = [
+      "SMART CIRCUIT FAULT PREDICTOR REPORT",
+      "Date: " + new Date().toLocaleString(),
+      "Component: " + info.title,
+      "Expected value: " + expected + " " + unit,
+      "Measured value: " + measured + " " + unit,
+      "Deviation: " + deviation.toFixed(2) + "%",
+      "Signed difference: " + signed.toFixed(2) + "%",
+      "Allowed deviation: ±" + tolerance + "%",
+      "Result: " + status,
+      "",
+      isOK ? info.ok : info.bad,
+      "",
+      "Suggested checks:",
+      ...info.steps.map(function (step) { return "- " + step; }),
+      "",
+      "Educational preliminary diagnosis only."
+    ].join("\n");
+
+    downloadBtn.disabled = false;
+  }
+
+  component.addEventListener("change", function () {
+    const values = defaults[component.value];
+    expectedInput.value = values[0];
+    measuredInput.value = values[1];
+    unitInput.value = values[2];
+    toleranceInput.value = values[3];
+    result.innerHTML = '<div class="placeholder">Values updated for ' + guidance[component.value].title + '. Press <b>Analyze Component</b> to view the result.</div>';
+    downloadBtn.disabled = true;
+    lastReport = "";
+  });
+
+  form.addEventListener("submit", analyze);
+
+  downloadBtn.addEventListener("click", function () {
+    if (!lastReport) return;
+    const blob = new Blob([lastReport], {type: "text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "circuit-diagnostic-report.txt";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+})();
+</script>
+</body>
+</html>
